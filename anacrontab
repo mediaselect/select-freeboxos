@@ -1,5 +1,0 @@
-SHELL=/bin/bash
-RANDOM_DELAY=3
-ANACRON_PATH=$HOME/.local/share/select_freeboxos
-
-1  20  auto_update  /bin/bash -c "$HOME/select-freeboxos/auto_update.sh >> $HOME/.local/share/select_freeboxos/logs/auto_update.log 2>&1"
