@@ -1,1 +1,0 @@
-*/10 * * * * cd /opt/select_freeboxos && python3 cron_select.py
