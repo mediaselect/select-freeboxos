@@ -111,9 +111,9 @@ step_5_geckodriver_download() {
 
   if echo "${amd64[@],,}" | grep -q "$cpu_five_chars"
   then
-    wget https://github.com/mozilla/geckodriver/releases/download/v0.34.0/geckodriver-v0.34.0-linux64.tar.gz
-    sudo -u $user bash -c "tar xzvf geckodriver-v0.34.0-linux64.tar.gz"
-    rm geckodriver-v0.34.0-linux64.tar.gz
+    wget https://github.com/mozilla/geckodriver/releases/download/v0.35.0/geckodriver-v0.35.0-linux64.tar.gz
+    sudo -u $user bash -c "tar xzvf geckodriver-v0.35.0-linux64.tar.gz"
+    rm geckodriver-v0.35.0-linux64.tar.gz
   else
     info_not_amd64=true
   echo "Step 5 - geckodriver download done"
