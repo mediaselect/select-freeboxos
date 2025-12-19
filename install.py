@@ -21,7 +21,7 @@ from module_freeboxos import get_website_title, is_snap_installed, is_firefox_sn
 user = os.getenv("USER")
 
 logging.basicConfig(
-    filename="/home/" + user + "/.local/share/select_freeboxos/logs/select_freeboxos.log",
+    filename=f"/home/{user}/.local/share/select_freeboxos/logs/select_freeboxos.log",
     format="%(asctime)s %(levelname)s: %(message)s",
     level=logging.INFO,
 )
@@ -193,7 +193,7 @@ print("Le programme peut atteindre la page de login de Freebox OS. Il "
 if is_snap_installed() and is_firefox_snap():
     service = Service(executable_path="/snap/bin/firefox.geckodriver")
 else:
-    service = Service(executable_path="/home/" + user + "/.local/share/select_freeboxos/geckodriver")
+    service = Service(executable_path=f"/home/{user}/.local/share/select_freeboxos/geckodriver")
 options = webdriver.FirefoxOptions()
 options.add_argument("--ignore-ssl-errors=yes")
 options.add_argument("--ignore-certificate-errors")
@@ -211,14 +211,14 @@ except SessionNotCreatedException as e:
 
 try:
     if https:
-        driver.get("https://" + FREEBOX_SERVER_IP + "/login.php")
+        driver.get(f"https://{FREEBOX_SERVER_IP}/login.php")
     else:
-        driver.get("http://" + FREEBOX_SERVER_IP + "/login.php")
+        driver.get(f"http://{FREEBOX_SERVER_IP}/login.php")
 except WebDriverException as e:
     if 'net::ERR_ADDRESS_UNREACHABLE' in e.msg:
-        print("The programme cannot reach the address " + FREEBOX_SERVER_IP + " . Exit programme.")
+        print(f"The programme cannot reach the address {FREEBOX_SERVER_IP} . Exit programme.")
         logging.error(
-            "The programme cannot reach the address " + FREEBOX_SERVER_IP + " . Exit programme."
+            f"The programme cannot reach the address {FREEBOX_SERVER_IP} . Exit programme."
         )
         driver.quit()
         exit()
@@ -384,7 +384,7 @@ if go_on:
               "CRYPTED_CREDENTIALS"
               ]
 
-    with open("/home/" + user + "/.config/select_freeboxos/config.py", "w") as conf:
+    with open(f"/home/{user}/.config/select_freeboxos/config.py", "w") as conf:
         https_present = False
         for param in params:
             if "ADMIN_PASSWORD" in param:
@@ -560,7 +560,7 @@ if go_on:
             os.chmod(cron_file, 0o700)
 
             with open(
-                "/home/" + user + "/.local/share/select_freeboxos"
+                f"/home/{user}/.local/share/select_freeboxos"
                 "/cron_tasks.sh", "r"
             ) as crontab_file:
                 cron_lines = crontab_file.readlines()
@@ -599,7 +599,7 @@ if go_on:
                 cron_lines.append(cron_anacron)
 
             with open(
-                "/home/" + user + "/.local/share/select_freeboxos"
+                f"/home/{user}/.local/share/select_freeboxos"
                 "/cron_tasks.sh", "w"
             ) as crontab_file:
                 for cron_task in cron_lines:

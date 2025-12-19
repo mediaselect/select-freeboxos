@@ -5,8 +5,11 @@ import os
 import sentry_sdk
 import shutil
 import sys
+import tempfile
+import re
 
 from datetime import datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 from time import sleep
 from logging.handlers import RotatingFileHandler
@@ -23,33 +26,71 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 from channels_free import CHANNELS_FREE
 from module_freeboxos import get_website_title, is_snap_installed, is_firefox_snap
 
-user = os.getenv("USER")
+def get_validated_user():
+    """Securely get and validate the USER environment variable."""
+    user = os.getenv("USER")
+    if not user:
+        raise ValueError("USER environment variable is not set")
 
-sys.path.append("/home/" + user + "/.config/select_freeboxos")
+    if not re.match(r'^[a-zA-Z0-9_-]+$', user):
+        raise ValueError(f"Invalid USER environment variable: contains unsafe characters")
 
-from config import (
-    ADMIN_PASSWORD,
-    FREEBOX_SERVER_IP,
-    MEDIA_SELECT_TITLES,
-    MAX_SIM_RECORDINGS,
-    HTTPS,
-    SENTRY_MONITORING_SDK,
-    CRYPTED_CREDENTIALS
-)
+    home_path = Path.home()
+    expected_home = Path(f"/home/{user}")
 
-if CRYPTED_CREDENTIALS:
+    if home_path != expected_home:
+        user = home_path.name
+        if not re.match(r'^[a-zA-Z0-9_-]+$', user):
+            raise ValueError("Home directory name contains unsafe characters")
+
+    return user
+
+try:
+    user = get_validated_user()
+except ValueError as e:
+    print(f"SECURITY ERROR: {e}", file=sys.stderr)
+    sys.exit(1)
+
+BASE_DIR = Path.home() / ".local" / "share" / "select_freeboxos"
+CONFIG_DIR = Path.home() / ".config" / "select_freeboxos"
+LOG_FILE = BASE_DIR / "logs" / "select_freeboxos.log"
+INFO_PROGS_FILE = BASE_DIR / "info_progs.json"
+INFO_PROGS_LAST_FILE = BASE_DIR / "info_progs_last.json"
+GECKODRIVER_PATH = BASE_DIR / "geckodriver"
+
+def validate_path_safety(path, base_dir):
+    """Ensure path doesn't escape base directory via traversal attacks."""
     try:
-        FREEBOX_SERVER_IP = keyring.get_password("freeboxos", "username")
-        ADMIN_PASSWORD = keyring.get_password("freeboxos", "password")
-        if FREEBOX_SERVER_IP is None:
-            logging.error("Failed to retrieve 'username' from keyring for 'freeboxos'.")
-            exit(1)
-        if ADMIN_PASSWORD is None:
-            logging.error("Failed to retrieve 'password' from keyring for 'freeboxos'.")
-            exit(1)
-    except Exception as e:
-        logging.exception("An error occurred while retrieving credentials from keyring.")
-        exit(1)
+        resolved_path = path.resolve()
+        resolved_base = base_dir.resolve()
+        resolved_path.relative_to(resolved_base)
+        return resolved_path
+    except (ValueError, RuntimeError):
+        raise ValueError(f"Path {path} attempts to escape base directory {base_dir}")
+
+try:
+    validate_path_safety(BASE_DIR, Path.home())
+    validate_path_safety(CONFIG_DIR, Path.home())
+    validate_path_safety(LOG_FILE, BASE_DIR)
+except ValueError as e:
+    print(f"SECURITY ERROR: {e}", file=sys.stderr)
+    sys.exit(1)
+
+sys.path.insert(0, str(CONFIG_DIR))
+
+try:
+    from config import (
+        ADMIN_PASSWORD,
+        FREEBOX_SERVER_IP,
+        MEDIA_SELECT_TITLES,
+        MAX_SIM_RECORDINGS,
+        HTTPS,
+        SENTRY_MONITORING_SDK,
+        CRYPTED_CREDENTIALS
+    )
+except ImportError as e:
+    print(f"ERROR: Failed to import configuration: {e}", file=sys.stderr)
+    sys.exit(1)
 
 month_names_fr = {
     '01': 'Jan',
@@ -71,6 +112,44 @@ def translate_month(month_num):
         return month_names_fr[month_num]
     else:
         return "Mois invalide"
+
+class SensitiveDataFilter(logging.Filter):
+    """Filter to redact sensitive data from logs."""
+
+    def __init__(self):
+        super().__init__()
+        self.sensitive_patterns = []
+
+        if not CRYPTED_CREDENTIALS and ADMIN_PASSWORD:
+            escaped_pwd = re.escape(ADMIN_PASSWORD)
+            self.sensitive_patterns.append((re.compile(escaped_pwd), '[REDACTED_PASSWORD]'))
+
+        if not CRYPTED_CREDENTIALS and FREEBOX_SERVER_IP:
+            escaped_ip = re.escape(FREEBOX_SERVER_IP)
+            self.sensitive_patterns.append((re.compile(escaped_ip), '[REDACTED_IP]'))
+
+    def filter(self, record):
+        """
+        This method is called automatically by Python's logging framework
+        for every log record that passes through handlers with this filter.
+        """
+        # Redact sensitive data from message
+        if record.msg:
+            msg = str(record.msg)
+            for pattern, replacement in self.sensitive_patterns:
+                msg = pattern.sub(replacement, msg)
+            record.msg = msg
+
+        # Redact from args if present
+        if record.args:
+            args = list(record.args) if isinstance(record.args, tuple) else [record.args]
+            for i, arg in enumerate(args):
+                if isinstance(arg, str):
+                    for pattern, replacement in self.sensitive_patterns:
+                        args[i] = pattern.sub(replacement, arg)
+            record.args = tuple(args) if isinstance(record.args, tuple) else args[0]
+
+        return True
 
 def cancel_record(driver):
     text_to_click = "Annuler"
@@ -95,20 +174,65 @@ def find_element_with_retries(driver, by, value, retries=3, delay=1):
     driver.quit()
     exit()
 
+def validate_video_title(title):
+    """Validate video title"""
+    # Allow most characters but remove potentially dangerous ones
+    sanitized_title = re.sub(r'[<>\'"]', '', title)
+    if len(sanitized_title) > 200:
+        sanitized_title = sanitized_title[:200]
+
+    return sanitized_title
+
+def atomic_file_copy(src, dst):
+    """Perform atomic file copy to prevent corruption."""
+    src_path = Path(src)
+    dst_path = Path(dst)
+
+    validate_path_safety(src_path, BASE_DIR)
+    validate_path_safety(dst_path, BASE_DIR)
+
+    with tempfile.NamedTemporaryFile(
+        mode='w',
+        dir=dst_path.parent,
+        delete=False,
+        prefix='.tmp_',
+        suffix=dst_path.suffix
+    ) as tmp_file:
+        tmp_path = Path(tmp_file.name)
+
+    try:
+        shutil.copy2(src_path, tmp_path)
+
+        if not tmp_path.exists():
+            raise IOError("Temporary file was not created")
+
+        tmp_path.replace(dst_path)
+    except Exception as e:
+        # Clean up temporary file on error
+        if tmp_path.exists():
+            tmp_path.unlink()
+        raise e
+
 if SENTRY_MONITORING_SDK:
     sentry_sdk.init(
         dsn="https://730d02f037b381f4c37d1c8c26517838@o4508778574381056.ingest.de.sentry.io/4508841984131152",
         traces_sample_rate=0,
+        send_default_pii=False,
+        include_local_variables=False,
+        before_send=lambda event, hint: None if any(
+            keyword in str(event).lower()
+            for keyword in ['password', 'credential', 'secret', 'token']
+        ) else event,
     )
     if sentry_sdk.Hub.current.client and sentry_sdk.Hub.current.client.options.get("traces_sample_rate", 0) > 0:
         sentry_sdk.profiler.start_profiler()
 
+LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-log_file = "/home/" + user + "/.local/share/select_freeboxos/logs/select_freeboxos.log"
 max_bytes = 10 * 1024 * 1024  # 10 MB
 backup_count = 5
 
-log_handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
+log_handler = RotatingFileHandler(str(LOG_FILE), maxBytes=max_bytes, backupCount=backup_count)
 log_format = '%(asctime)s %(levelname)s %(message)s'
 log_datefmt = '%d-%m-%Y %H:%M:%S'
 formatter = logging.Formatter(log_format, log_datefmt)
@@ -121,6 +245,10 @@ logger.addHandler(log_handler)
 sentry_handler = logging.StreamHandler()
 sentry_handler.setLevel(logging.WARNING)
 
+sensitive_filter = SensitiveDataFilter()
+log_handler.addFilter(sensitive_filter)
+sentry_handler.addFilter(sensitive_filter)
+
 logger.addHandler(sentry_handler)
 logger.setLevel(logging.INFO)
 
@@ -128,6 +256,26 @@ logging.basicConfig(level=logging.INFO,
                     format=log_format,
                     datefmt=log_datefmt,
                     handlers=[log_handler, sentry_handler])
+
+if CRYPTED_CREDENTIALS:
+    try:
+        FREEBOX_SERVER_IP = keyring.get_password("freeboxos", "username")
+        ADMIN_PASSWORD = keyring.get_password("freeboxos", "password")
+        if FREEBOX_SERVER_IP is None:
+            logging.error("Failed to retrieve 'username' from keyring for 'freeboxos'.")
+            exit(1)
+        if ADMIN_PASSWORD is None:
+            logging.error("Failed to retrieve 'password' from keyring for 'freeboxos'.")
+            exit(1)
+        sensitive_filter_updated = SensitiveDataFilter()
+        log_handler.removeFilter(sensitive_filter)
+        sentry_handler.removeFilter(sensitive_filter)
+        log_handler.addFilter(sensitive_filter_updated)
+        sentry_handler.addFilter(sensitive_filter_updated)
+
+    except Exception as e:
+        logging.exception("An error occurred while retrieving credentials from keyring.")
+        exit(1)
 
 if HTTPS is False:
     url = "http://" + FREEBOX_SERVER_IP
@@ -141,7 +289,7 @@ if HTTPS is False:
 
 try:
     with open(
-        "/home/" + user + "/.local/share/select_freeboxos/info_progs.json", "r"
+        f"/home/{user}/.local/share/select_freeboxos/info_progs.json", "r", encoding='utf-8'
     ) as jsonfile:
         data_info_progs = json.load(jsonfile)
 except FileNotFoundError:
@@ -158,7 +306,7 @@ except json.JSONDecodeError:
 
 try:
     with open(
-        "/home/" + user + "/.local/share/select_freeboxos/"
+        f"/home/{user}/.local/share/select_freeboxos/"
         "progs_to_record.json", "r"
     ) as jsonfile:
         data = json.load(jsonfile)
@@ -169,16 +317,15 @@ except FileNotFoundError:
     exit()
 
 if len(data) == 0 or len(data_info_progs) == 0:
-    src_file = os.path.join(os.path.expanduser("~"), ".local", "share", "select_freeboxos", "info_progs.json")
-    dst_file = os.path.join(os.path.expanduser("~"), ".local", "share", "select_freeboxos", "info_progs_last.json")
-    shutil.copy(src_file, dst_file)
+    atomic_file_copy(INFO_PROGS_FILE, INFO_PROGS_LAST_FILE)
     logging.info("No data to record programmes. Exit programme.")
     exit()
 
 if is_snap_installed() and is_firefox_snap():
     service = Service(executable_path="/snap/bin/firefox.geckodriver")
 else:
-    service = Service(executable_path="/home/" + user + "/.local/share/select_freeboxos/geckodriver")
+    service = Service(executable_path=f"/home/{user}/.local/share/select_freeboxos/geckodriver")
+
 options = webdriver.FirefoxOptions()
 options.add_argument("start-maximized")
 options.add_argument("--headless")
@@ -187,24 +334,21 @@ try:
     with webdriver.Firefox(service=service, options=options) as driver:
         try:
             if HTTPS:
-                driver.get("https://" + FREEBOX_SERVER_IP + "/login.php#Fbx.os.app.pvr.app")
+                driver.get(f"https://{FREEBOX_SERVER_IP}/login.php#Fbx.os.app.pvr.app")
                 sleep(8)
             else:
-                driver.get("http://" + FREEBOX_SERVER_IP + "/login.php#Fbx.os.app.pvr.app")
+                driver.get(f"http://{FREEBOX_SERVER_IP}/login.php#Fbx.os.app.pvr.app")
                 sleep(8)
         except WebDriverException as e:
             if 'net::ERR_ADDRESS_UNREACHABLE' in e.msg:
                 logging.error(
-                    "The programme cannot reach the address " + FREEBOX_SERVER_IP + " . Exit programme."
+                    f"The programme cannot reach the address {FREEBOX_SERVER_IP} . Exit programme."
                 )
                 driver.quit()
                 exit()
             else:
                 logging.error("A WebDriverException occurred. Exiting the program.")
-                logging.error(f"Exception message: {e.msg}")
-                logging.error(f"Exception stack trace: {e.stacktrace}")
-                logging.error(f"Exception screenshot: {e.screen if hasattr(e, 'screen') else 'N/A'}")
-                logging.error(f"Exception log: {e.log if hasattr(e, 'log') else 'N/A'}")
+                logging.error(f"Exception type: {type(e).__name__}")
                 driver.quit()
                 exit()
 
@@ -212,7 +356,7 @@ try:
             login = driver.find_element("id", "fbx-password")
         except Exception as e:
             logging.error(
-                "Cannot connect to Freebox OS. Exit programme.", exc_info=True
+                "Cannot connect to Freebox OS. Exit programme.", exc_info=False
             )
             driver.quit()
             exit()
@@ -220,6 +364,7 @@ try:
         login.click()
         sleep(1)
         login.send_keys(ADMIN_PASSWORD)
+        ADMIN_PASSWORD = None
         sleep(1)
         login.send_keys(Keys.RETURN)
         sleep(10)
@@ -241,7 +386,7 @@ try:
 
         try:
             with open(
-                "/home/" + user + "/.local/share/select_freeboxos/info_progs_last.json", "r"
+                f"/home/{user}/.local/share/select_freeboxos/info_progs_last.json", "r", encoding='utf-8'
             ) as jsonfile:
                 data_last = json.load(jsonfile)
         except FileNotFoundError:
@@ -312,8 +457,6 @@ try:
                     programmer_enregistrements.click()
                 except ElementClickInterceptedException as e:
                     logging.error("A ElementClickInterceptedException occurred.")
-                    logging.error(f"Exception message: {e.msg}")
-                    logging.error(f"Exception stack trace: {e.stacktrace}")
                     logging.error(
                         "Impossible de programmer les enregistrements. "
                         "Une fenêtre d'information empêche probablement "
@@ -373,12 +516,10 @@ try:
                         day_click = driver.find_element(By.XPATH, xpath)
                     except NoSuchElementException as e:
                         logging.error("A NoSuchElementException occurred.")
-                        logging.error(f"Exception message: {e.msg}")
-                        logging.error(f"Exception stack trace: {e.stacktrace}")
                         logging.error(
-                            "Impossible de trouver la date pour le programme "
-                            + video["title"] + ". Le programme ne sera pas "
-                            "enregistré."
+                            "Impossible de trouver la date pour le programme %s. Le "
+                            "programme ne sera pas enregistré.",
+                            validate_video_title(video['title'])
                         )
                         cancel_record(driver)
                         continue
@@ -406,7 +547,9 @@ try:
                         loop_counter += 1
                         if loop_counter > 4:
                             logging.error(
-                                f"Impossible de saisir l'heure de début pour le programme {video['title']}. Le programme ne sera pas enregistré."
+                                "Impossible de saisir l'heure de début pour le "
+                                "programme %s. Le programme ne sera pas enregistré.",
+                                validate_video_title(video['title'])
                             )
                             to_cancel = True
                             break
@@ -434,7 +577,9 @@ try:
                         loop_counter += 1
                         if loop_counter > 4:
                             logging.error(
-                                f"Impossible de saisir l'heure de fin pour le programme {video['title']}. Le programme ne sera pas enregistré."
+                                "Impossible de saisir l'heure de fin pour le "
+                                "programme %s. Le programme ne sera pas enregistré.",
+                                validate_video_title(video['title'])
                             )
                             to_cancel = True
                             break
@@ -449,7 +594,7 @@ try:
                             try:
                                 name_prog.clear()
                                 sleep(1)
-                                name_prog.send_keys(video["title"])
+                                name_prog.send_keys(validate_video_title(video["title"]))
                                 sleep(1)
                             except ElementNotInteractableException:
                                 logging.error(
@@ -481,9 +626,9 @@ try:
         sleep(6)
         driver.quit()
 
-        src_file = os.path.join(os.path.expanduser("~"), ".local", "share", "select_freeboxos", "info_progs.json")
-        dst_file = os.path.join(os.path.expanduser("~"), ".local", "share", "select_freeboxos", "info_progs_last.json")
-        shutil.copy(src_file, dst_file)
+        atomic_file_copy(INFO_PROGS_FILE, INFO_PROGS_LAST_FILE)
+
 except Exception as e:
     logging.error("An unexpected error occurred:")
-    logging.error("Exception: %s", e)
+    logging.error("Exception type: %s", type(e).__name__)
+    logging.error("Exception message: %s", str(e)[:100])
