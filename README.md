@@ -1,4 +1,4 @@
-# select-freeboxos v1.0.0:
+# select-freeboxos v2.0.0:
 
 ## Instructions d'installation:
 
