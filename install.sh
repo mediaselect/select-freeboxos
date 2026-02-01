@@ -129,12 +129,20 @@ step_6_geckodriver_download() {
   echo "---------------------------------------------------------------------"
   echo "Starting step 6 - geckodriver download"
   cd "$HOME_DIR/.local/share/select_freeboxos"
-  cpu=$(lscpu | grep Architecture | awk {'print $2'})
-  cpu_lower=$(echo "$cpu" | tr '[:upper:]' '[:lower:]')
-  cpu_five_chars="${cpu_lower:0:5}"
+  case "$(uname -m)" in
+    x86_64|amd64)
+      arch="amd64"
+      ;;
+    aarch64|arm64)
+      arch="arm64"
+      ;;
+    *)
+      echo "ERROR: unsupported architecture $(uname -m)" >&2
+      exit 1
+      ;;
+  esac
 
-  if echo "${amd64[@],,}" | grep -q "$cpu_five_chars"
-  then
+  if [ "$arch" = "amd64" ]; then
     wget https://github.com/mozilla/geckodriver/releases/download/v0.35.0/geckodriver-v0.35.0-linux64.tar.gz
     GECKODRIVER_SHA256="ac26e9ba8f3b8ce0fbf7339b9c9020192f6dcfcbf04a2bcd2af80dfe6bb24260"
     if ! echo "$GECKODRIVER_SHA256  geckodriver-v0.35.0-linux64.tar.gz" | sha256sum -c -; then
