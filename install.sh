@@ -157,23 +157,6 @@ step_6_geckodriver_download() {
   fi
 }
 
-step_7_virtual_environment() {
-  echo "---------------------------------------------------------------------"
-  echo "Starting step 7 - Virtual env + requirements install"
-  curl -f --location -o virtualenv.pyz https://bootstrap.pypa.io/virtualenv.pyz
-  VENV_SHA256="8c34d62f8dff28c87a9640257831d1c7ba81dd60c1cf0acbe57b3d4baa627b87"
-  if ! echo "$VENV_SHA256  virtualenv.pyz" | sha256sum -c -; then
-      echo "ERROR: Checksum verification failed for virtualenv!"
-      exit 1
-  fi
-  sudo -u "$user" bash -c "$PYTHON_COMMAND virtualenv.pyz .venv"
-  sudo -u "$user" bash -c '
-    source .venv/bin/activate
-    pip install -r "$HOME_DIR/select-freeboxos/requirements.txt"
-  '
-  echo "Step 7 - Virtual env created and requirements installed"
-}
-
 
 STEP=0
 
@@ -186,7 +169,6 @@ case ${STEP} in
   step_4_create_select_freeboxos_directories
   step_5_install_gpg_key
   step_6_geckodriver_download
-  step_7_virtual_environment
   ;;
 esac
 
