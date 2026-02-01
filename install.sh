@@ -3,6 +3,13 @@
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
+user=${SUDO_USER:-$USER}
+HOME_DIR=$(getent passwd "$user" | cut -d: -f6)
+if [ -z "$HOME_DIR" ]; then
+  echo "ERROR: unable to determine home directory for user '$user'" >&2
+  exit 1
+fi
+
 if [ $(id -u) != 0 ] ; then
   echo "Les droits Superuser (root) sont nécessaires pour installer select-freeboxos"
   echo "Lancez 'sudo $0' pour obtenir les droits Superuser."
@@ -62,19 +69,9 @@ step_2_mainpackage() {
 step_3_freeboxos_download() {
   echo "---------------------------------------------------------------------"
   echo "Starting step 3 - select-freeboxos download"
-
-  user=${SUDO_USER:-$USER}
-  HOME_DIR=$(getent passwd "$user" | cut -d: -f6)
-  if [ -z "$HOME_DIR" ]; then
-    echo "ERROR: unable to determine home directory for user '$user'" >&2
-    exit 1
-  fi
-
   cd "$HOME_DIR" && curl https://github.com/mediaselect/select-freeboxos/archive/refs/tags/v2.0.0.zip -L -o select_freebox.zip
-  selectos=$(ls "$HOME_DIR" | grep select-freeboxos)
-  if [ -n "$selectos" ]
-  then
-    rm -rf /home/$user/select-freeboxos
+  if [ -d "$HOME_DIR/select-freeboxos" ]; then
+      rm -rf "$HOME_DIR/select-freeboxos"
   fi
   unzip select_freebox.zip && mv select-freeboxos-2.0.0 select-freeboxos && rm select_freebox.zip
   chown -R "$SUDO_USER:$SUDO_USER" "$HOME_DIR/select-freeboxos"
@@ -84,37 +81,29 @@ step_3_freeboxos_download() {
 step_4_create_select_freeboxos_directories() {
   echo "---------------------------------------------------------------------"
   echo "Starting step 4 - Creating .local/share/select_freeboxos"
-  user=${SUDO_USER:-${USER}}
   echo "User: $user"
-  if [ ! -d /home/$user/.local ]; then
-    sudo -u $user mkdir /home/$user/.local
-    sudo -u $user chmod 700 /home/$user/.local
+  if [ ! -d "$HOME_DIR/.local" ]; then
+    sudo -u "$user" mkdir "$HOME_DIR/.local"
+    sudo -u "$user" chmod 700 "$HOME_DIR/.local"
   fi
-  if [ ! -d /home/$user/.local/share ]; then
-    sudo -u $user mkdir /home/$user/.local/share
-    sudo -u $user chmod 700 /home/$user/.local/share
+  if [ ! -d "$HOME_DIR/.local/share" ]; then
+    sudo -u "$user" mkdir "$HOME_DIR/.local/share"
+    sudo -u "$user" chmod 700 "$HOME_DIR/.local/share"
   fi
-  if [ ! -d /home/$user/.config ]; then
-    sudo -u $user mkdir /home/$user/.config
-    sudo -u $user chmod 700 /home/$user/.config
+  if [ ! -d "$HOME_DIR/.config" ]; then
+    sudo -u "$user" mkdir "$HOME_DIR/.config"
+    sudo -u "$user" chmod 700 "$HOME_DIR/.config"
   fi
-  sudo -u $user mkdir -p /home/$user/.local/share/select_freeboxos/logs
-  sudo -u $user chmod -R 740 /home/$user/.local/share/select_freeboxos
-  sudo -u $user mkdir -p /home/$user/.config/select_freeboxos
-  sudo -u $user chmod -R 740 /home/$user/.config/select_freeboxos
+  sudo -u "$user" mkdir -p "$HOME_DIR/.local/share/select_freeboxos/logs"
+  sudo -u "$user" chmod -R 740 "$HOME_DIR/.local/share/select_freeboxos"
+  sudo -u "$user" mkdir -p "$HOME_DIR/.config/select_freeboxos"
+  sudo -u "$user" chmod -R 740 "$HOME_DIR/.config/select_freeboxos"
   echo "Step 4 - select_freeboxos directories created"
 }
 
 step_5_install_gpg_key() {
   echo "---------------------------------------------------------------------"
   echo "Step 5 - Installing GPG public key"
-
-  user=${SUDO_USER:-$USER}
-  HOME_DIR=$(getent passwd "$user" | cut -d: -f6)
-  if [ -z "$HOME_DIR" ]; then
-    echo "ERROR: unable to determine home directory for user '$user'" >&2
-    exit 1
-  fi
 
   SRC_KEY="$HOME_DIR/select-freeboxos/.gpg/public.key"
   DEST_DIR="$HOME_DIR/.config/select_freeboxos"
@@ -139,7 +128,7 @@ info_not_amd64=false
 step_6_geckodriver_download() {
   echo "---------------------------------------------------------------------"
   echo "Starting step 6 - geckodriver download"
-  cd /home/$user/.local/share/select_freeboxos
+  cd "$HOME_DIR/.local/share/select_freeboxos"
   cpu=$(lscpu | grep Architecture | awk {'print $2'})
   cpu_lower=$(echo "$cpu" | tr '[:upper:]' '[:lower:]')
   cpu_five_chars="${cpu_lower:0:5}"
@@ -152,7 +141,7 @@ step_6_geckodriver_download() {
         echo "ERROR: Checksum verification failed for geckodriver!"
         exit 1
     fi
-    sudo -u $user bash -c "tar xzvf geckodriver-v0.35.0-linux64.tar.gz"
+    sudo -u "$user" bash -c "tar xzvf geckodriver-v0.35.0-linux64.tar.gz"
     rm geckodriver-v0.35.0-linux64.tar.gz
   else
     info_not_amd64=true
@@ -169,8 +158,11 @@ step_7_virtual_environment() {
       echo "ERROR: Checksum verification failed for virtualenv!"
       exit 1
   fi
-  sudo -u $user bash -c "$PYTHON_COMMAND virtualenv.pyz .venv"
-  sudo -u $user bash -c "source .venv/bin/activate && pip install -r /home/$user/select-freeboxos/requirements.txt"
+  sudo -u "$user" bash -c "$PYTHON_COMMAND virtualenv.pyz .venv"
+  sudo -u "$user" bash -c '
+    source .venv/bin/activate
+    pip install -r "$HOME_DIR/select-freeboxos/requirements.txt"
+  '
   echo "Step 7 - Virtual env created and requirements installed"
 }
 
