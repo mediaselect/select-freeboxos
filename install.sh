@@ -97,13 +97,36 @@ step_4_create_select_freeboxos_directories() {
   echo "Step 4 - select_freeboxos directories created"
 }
 
+step_5_install_gpg_key() {
+  echo "---------------------------------------------------------------------"
+  echo "Step 5 - Installing GPG public key"
+
+  user=${SUDO_USER:-${USER}}
+  HOME_DIR=$(eval echo "~$user")
+
+  SRC_KEY="$HOME_DIR/select-freeboxos/.gpg/public.key"
+  DEST_DIR="$HOME_DIR/.config/select_freeboxos"
+  DEST_KEY="$DEST_DIR/public.key"
+
+  if [ ! -f "$SRC_KEY" ]; then
+    echo "ERROR: GPG public key not found at $SRC_KEY"
+    exit 1
+  fi
+
+  sudo -u "$user" mkdir -p "$DEST_DIR"
+  sudo -u "$user" cp "$SRC_KEY" "$DEST_KEY"
+  sudo -u "$user" chmod 640 "$DEST_KEY"
+
+  echo "Step 5 - GPG public key installed"
+}
+
 amd64=("x86_64" "x86" "amd64")
 
 info_not_amd64=false
 
-step_5_geckodriver_download() {
+step_6_geckodriver_download() {
   echo "---------------------------------------------------------------------"
-  echo "Starting step 5 - geckodriver download"
+  echo "Starting step 6 - geckodriver download"
   cd /home/$user/.local/share/select_freeboxos
   cpu=$(lscpu | grep Architecture | awk {'print $2'})
   cpu_lower=$(echo "$cpu" | tr '[:upper:]' '[:lower:]')
@@ -116,17 +139,17 @@ step_5_geckodriver_download() {
     rm geckodriver-v0.35.0-linux64.tar.gz
   else
     info_not_amd64=true
-  echo "Step 5 - geckodriver download done"
+  echo "Step 6 - geckodriver download done"
   fi
 }
 
-step_6_virtual_environment() {
+step_7_virtual_environment() {
   echo "---------------------------------------------------------------------"
-  echo "Starting step 6 - Virtual env + requirements install"
+  echo "Starting step 7 - Virtual env + requirements install"
   curl --location -o virtualenv.pyz https://bootstrap.pypa.io/virtualenv.pyz
   sudo -u $user bash -c "$PYTHON_COMMAND virtualenv.pyz .venv"
   sudo -u $user bash -c "source .venv/bin/activate && pip install -r /home/$user/select-freeboxos/requirements.txt"
-  echo "Step 6 - Virtual env created and requirements installed"
+  echo "Step 7 - Virtual env created and requirements installed"
 }
 
 
@@ -139,8 +162,9 @@ case ${STEP} in
   step_2_mainpackage
   step_3_freeboxos_download
   step_4_create_select_freeboxos_directories
-  step_5_geckodriver_download
-  step_6_virtual_environment
+  step_5_install_gpg_key
+  step_6_geckodriver_download
+  step_7_virtual_environment
   ;;
 esac
 
