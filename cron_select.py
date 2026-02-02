@@ -90,7 +90,7 @@ if not CRYPTED_CREDENTIALS:
         exit()
 
 stat_result = run(
-    ["stat", "-c", "%Y-%s", INFO_PROGS],
+    ["/usr/bin/stat", "-c", "%Y-%s", INFO_PROGS],
     capture_output=True,
     text=True,
     check=False
@@ -133,7 +133,7 @@ if info_progs_last_mod_time is None or info_progs_last_mod_time.date() < datetim
             try:
                 curl_result = run(
                     [
-                        "curl",
+                        "/usr/bin/curl",
                         "-H", "Accept: application/json;indent=4",
                         "-n",
                         API_URL,
@@ -154,5 +154,5 @@ if info_progs_last_mod_time is None or info_progs_last_mod_time.date() < datetim
 
         remove_items(INFO_PROGS, INFO_PROGS_LAST, PROGS_TO_RECORD)
 
-        cmd = ["bash", "cron_freeboxos_app.sh"]
+        cmd = ["/bin/bash", "cron_freeboxos_app.sh"]
         Popen(cmd, cwd=f"/home/{user}/select-freeboxos", stdout=PIPE, stderr=PIPE)
