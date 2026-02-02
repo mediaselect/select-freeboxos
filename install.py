@@ -1,4 +1,5 @@
 import getpass
+import json
 import keyring
 import logging
 import os
@@ -356,10 +357,11 @@ if go_on:
             "Si vous répondez 'non', vous devrez mettre à jour l'application par "
             "vous-même. (répondre par oui ou non) : ").strip().lower()
 
-    config_path = os.path.join("/home", user, ".config/select_freeboxos/config.py")
-    template_path = os.path.join("/home", user, "select-freeboxos/config_template.py")
+    config_path = os.path.join("/home", user, ".config/select_freeboxos/config.json")
+    template_path = os.path.join("/home", user, "select-freeboxos/config_template.json")
 
     if not os.path.exists(config_path):
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
         shutil.copy(template_path, config_path)
         os.chmod(config_path, 0o640)
 
@@ -375,58 +377,30 @@ if go_on:
                         "identifiants par l'application MEDIA-select-fr. "
                         "(répondre par oui ou non) : ").strip().lower()
 
+    config = {}
 
-    params = ["ADMIN_PASSWORD",
-              "FREEBOX_SERVER_IP",
-              "MEDIA_SELECT_TITLES",
-              "MAX_SIM_RECORDINGS",
-              "SENTRY_MONITORING_SDK",
-              "CRYPTED_CREDENTIALS"
-              ]
+    config["CRYPTED_CREDENTIALS"] = crypted.lower() == "oui"
 
-    with open(f"/home/{user}/.config/select_freeboxos/config.py", "w") as conf:
-        https_present = False
-        for param in params:
-            if "ADMIN_PASSWORD" in param:
-                if crypted.lower() == "oui":
-                    conf.write('ADMIN_PASSWORD = "XXXXXXX"\n')
-                else:
-                    conf.write('ADMIN_PASSWORD = "' + freebox_os_password + '"\n')
-            elif "FREEBOX_SERVER_IP" in param:
-                if crypted.lower() == "oui":
-                    conf.write('FREEBOX_SERVER_IP = "XXXXXXX"\n')
-                else:
-                    conf.write('FREEBOX_SERVER_IP = "' + FREEBOX_SERVER_IP + '"\n')
-            elif "MEDIA_SELECT_TITLES" in param:
-                if title_answer.lower() == "oui":
-                    conf.write("MEDIA_SELECT_TITLES = True\n")
-                else:
-                    conf.write("MEDIA_SELECT_TITLES = False\n")
-            elif "MAX_SIM_RECORDINGS" in param:
-                conf.write("MAX_SIM_RECORDINGS = " + str(max_sim_recordings) + "\n")
-            elif "HTTPS" in param:
-                https_present = True
-                if https:
-                    conf.write("HTTPS = True\n")
-                else:
-                    conf.write("HTTPS = False\n")
-            elif "SENTRY_MONITORING_SDK" in param:
-                if record_logs.lower() == "oui":
-                    conf.write("SENTRY_MONITORING_SDK = True\n")
-                else:
-                    conf.write("SENTRY_MONITORING_SDK = False\n")
-            elif "CRYPTED_CREDENTIALS" in param:
-                if crypted.lower() == "oui":
-                    conf.write("CRYPTED_CREDENTIALS = True\n")
-                else:
-                    conf.write("CRYPTED_CREDENTIALS = False\n")
-            else:
-                conf.write(param + "\n")
-        if not https_present:
-            if https:
-                conf.write("HTTPS = True\n")
-            else:
-                conf.write("HTTPS = False\n")
+    if config["CRYPTED_CREDENTIALS"]:
+        config["ADMIN_PASSWORD"] = "XXXXXXX"
+        config["FREEBOX_SERVER_IP"] = "XXXXXXX"
+    else:
+        config["ADMIN_PASSWORD"] = freebox_os_password
+        config["FREEBOX_SERVER_IP"] = FREEBOX_SERVER_IP
+
+    config["MEDIA_SELECT_TITLES"] = title_answer.lower() == "oui"
+    config["MAX_SIM_RECORDINGS"] = int(max_sim_recordings)
+    config["HTTPS"] = bool(https)
+    config["SENTRY_MONITORING_SDK"] = record_logs.lower() == "oui"
+
+    config_path = f"/home/{user}/.config/select_freeboxos/config.json"
+
+    os.makedirs(os.path.dirname(config_path), exist_ok=True)
+
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=4)
+
+    os.chmod(config_path, 0o640)
 
     print("\nConfiguration des tâches cron du programme MEDIA-select:\n")
 

@@ -5,17 +5,26 @@ import os
 import requests
 import sys
 
+from pathlib import Path
 from subprocess import Popen, PIPE, run
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
 user = os.getenv("USER")
 
-sys.path.append(f"/home/{user}/.config/select_freeboxos")
+config_path = Path.home() / ".config" / "select_freeboxos" / "config.json"
 
-from config import (
-    CRYPTED_CREDENTIALS
-)
+try:
+    with config_path.open() as f:
+        config = json.load(f)
+except FileNotFoundError:
+    logging.error("Missing config.json file")
+    sys.exit(1)
+except json.JSONDecodeError:
+    logging.error("Invalid JSON in config.json")
+    sys.exit(1)
+
+CRYPTED_CREDENTIALS = bool(config.get("CRYPTED_CREDENTIALS", False))
 
 log_file = f"/home/{user}/.local/share/select_freeboxos/logs/select_freeboxos.log"
 max_bytes = 10 * 1024 * 1024  # 10 MB
