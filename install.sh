@@ -135,6 +135,11 @@ step_6_geckodriver_download() {
   if echo "${amd64[@],,}" | grep -q "$cpu_five_chars"
   then
     wget https://github.com/mozilla/geckodriver/releases/download/v0.35.0/geckodriver-v0.35.0-linux64.tar.gz
+    GECKODRIVER_SHA256="ac26e9ba8f3b8ce0fbf7339b9c9020192f6dcfcbf04a2bcd2af80dfe6bb24260"
+    if ! echo "$GECKODRIVER_SHA256  geckodriver-v0.35.0-linux64.tar.gz" | sha256sum -c -; then
+        echo "ERROR: Checksum verification failed for geckodriver!"
+        exit 1
+    fi
     sudo -u $user bash -c "tar xzvf geckodriver-v0.35.0-linux64.tar.gz"
     rm geckodriver-v0.35.0-linux64.tar.gz
   else
@@ -146,7 +151,12 @@ step_6_geckodriver_download() {
 step_7_virtual_environment() {
   echo "---------------------------------------------------------------------"
   echo "Starting step 7 - Virtual env + requirements install"
-  curl --location -o virtualenv.pyz https://bootstrap.pypa.io/virtualenv.pyz
+  curl -f --location -o virtualenv.pyz https://bootstrap.pypa.io/virtualenv.pyz
+  VENV_SHA256="8c34d62f8dff28c87a9640257831d1c7ba81dd60c1cf0acbe57b3d4baa627b87"
+  if ! echo "$VENV_SHA256  virtualenv.pyz" | sha256sum -c -; then
+      echo "ERROR: Checksum verification failed for virtualenv!"
+      exit 1
+  fi
   sudo -u $user bash -c "$PYTHON_COMMAND virtualenv.pyz .venv"
   sudo -u $user bash -c "source .venv/bin/activate && pip install -r /home/$user/select-freeboxos/requirements.txt"
   echo "Step 7 - Virtual env created and requirements installed"
