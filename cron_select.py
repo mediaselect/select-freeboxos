@@ -135,7 +135,7 @@ if info_progs_last_mod_time is None or info_progs_last_mod_time.date() < datetim
                 logging.info("Data downloaded with requests successfully.")
 
             except requests.RequestException as e:
-                logging.error(f"API request failed: {e}")
+                logging.error(f"API request failed: {e}", exc_info=False)
             except ValueError as e:
                 logging.error(f"Error: {e}")
         else:
