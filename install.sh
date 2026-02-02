@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
 
 if [ $(id -u) != 0 ] ; then
   echo "Les droits Superuser (root) sont nécessaires pour installer select-freeboxos"
