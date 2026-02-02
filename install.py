@@ -363,7 +363,7 @@ if go_on:
     if not os.path.exists(config_path):
         os.makedirs(os.path.dirname(config_path), exist_ok=True)
         shutil.copy(template_path, config_path)
-        os.chmod(config_path, 0o640)
+        os.chmod(config_path, 0o600)
 
     crypted = "no_se"
 
