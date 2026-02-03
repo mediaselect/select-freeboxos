@@ -121,8 +121,6 @@ step_5_install_gpg_key() {
   echo "Step 5 - GPG public key installed"
 }
 
-amd64=("x86_64" "x86" "amd64")
-
 info_not_amd64=false
 
 step_6_geckodriver_download() {
