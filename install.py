@@ -357,14 +357,6 @@ if go_on:
             "Si vous répondez 'non', vous devrez mettre à jour l'application par "
             "vous-même. (répondre par oui ou non) : ").strip().lower()
 
-    config_path = os.path.join("/home", user, ".config/select_freeboxos/config.json")
-    template_path = os.path.join("/home", user, "select-freeboxos/config_template.json")
-
-    if not os.path.exists(config_path):
-        os.makedirs(os.path.dirname(config_path), exist_ok=True)
-        shutil.copy(template_path, config_path)
-        os.chmod(config_path, 0o600)
-
     crypted = "no_se"
 
     while crypted.lower() not in answers:
@@ -400,7 +392,7 @@ if go_on:
     with open(config_path, "w") as f:
         json.dump(config, f, indent=4)
 
-    os.chmod(config_path, 0o640)
+    os.chmod(config_path, 0o600)
 
     print("\nConfiguration des tâches cron du programme MEDIA-select:\n")
 
