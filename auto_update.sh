@@ -2,7 +2,7 @@
 set -euo pipefail
 
 INSTALL_DIR="$HOME/select-freeboxos"
-CONFIG_DIR="$HOME/.config/select-freeboxos"
+CONFIG_DIR="$HOME/.config/select_freeboxos"
 LAST_RELEASE_FILE="$CONFIG_DIR/.last_release"
 
 REPO="mediaselect/select-freeboxos"
