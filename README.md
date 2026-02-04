@@ -1,4 +1,4 @@
-# select-freeboxos v3.0.0:
+# select-freeboxos v3.0.1:
 
 ## Instructions d'installation:
 
