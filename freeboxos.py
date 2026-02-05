@@ -27,6 +27,43 @@ from channels_free import CHANNELS_FREE
 from module_freeboxos import get_website_title, is_snap_installed, is_firefox_snap
 from security_sanitizer import global_sanitizer, scrub_event
 
+BASE_DIR = Path.home() / ".local" / "share" / "select_freeboxos"
+LOG_FILE = BASE_DIR / "logs" / "select_freeboxos.log"
+INFO_PROGS_FILE = BASE_DIR / "info_progs.json"
+INFO_PROGS_LAST_FILE = BASE_DIR / "info_progs_last.json"
+GECKODRIVER_PATH = BASE_DIR / "geckodriver"
+
+LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+max_bytes = 10 * 1024 * 1024  # 10 MB
+backup_count = 5
+
+log_handler = RotatingFileHandler(str(LOG_FILE), maxBytes=max_bytes, backupCount=backup_count)
+log_format = '%(asctime)s %(levelname)s %(message)s'
+log_datefmt = '%d-%m-%Y %H:%M:%S'
+formatter = logging.Formatter(log_format, log_datefmt)
+
+log_handler.setFormatter(formatter)
+
+logger = logging.getLogger("module_freeboxos")
+logger.addHandler(log_handler)
+
+sentry_handler = logging.StreamHandler()
+sentry_handler.setLevel(logging.WARNING)
+
+sensitive_filter = global_sanitizer
+
+log_handler.addFilter(sensitive_filter)
+sentry_handler.addFilter(sensitive_filter)
+
+sensitive_filter.update_patterns({
+    "admin_password": ADMIN_PASSWORD,
+    "freebox_ip": FREEBOX_SERVER_IP,
+})
+
+logger.addHandler(sentry_handler)
+logger.setLevel(logging.INFO)
+
 def get_validated_user():
     """Securely get and validate the USER environment variable."""
     user = os.getenv("USER")
@@ -49,14 +86,8 @@ def get_validated_user():
 try:
     user = get_validated_user()
 except ValueError as e:
-    print(f"SECURITY ERROR: {e}", file=sys.stderr)
+    logger.error(f"SECURITY ERROR: {e}", exc_info=False)
     sys.exit(1)
-
-BASE_DIR = Path.home() / ".local" / "share" / "select_freeboxos"
-LOG_FILE = BASE_DIR / "logs" / "select_freeboxos.log"
-INFO_PROGS_FILE = BASE_DIR / "info_progs.json"
-INFO_PROGS_LAST_FILE = BASE_DIR / "info_progs_last.json"
-GECKODRIVER_PATH = BASE_DIR / "geckodriver"
 
 def validate_path_safety(path, base_dir):
     """Ensure path doesn't escape base directory via traversal attacks."""
@@ -72,7 +103,7 @@ try:
     validate_path_safety(BASE_DIR, Path.home())
     validate_path_safety(LOG_FILE, BASE_DIR)
 except ValueError as e:
-    print(f"SECURITY ERROR: {e}", file=sys.stderr)
+    logger.error(f"SECURITY ERROR: {e}", exc_info=False)
     sys.exit(1)
 
 CONFIG_PATH = Path.home() / ".config" / "select_freeboxos" / "config.json"
@@ -81,10 +112,10 @@ try:
     with CONFIG_PATH.open() as f:
         config = json.load(f)
 except FileNotFoundError:
-    print("ERROR: config.json not found", file=sys.stderr)
+    logger.error("ERROR: config.json not found")
     sys.exit(1)
 except json.JSONDecodeError as e:
-    print(f"ERROR: invalid config.json: {e}", file=sys.stderr)
+    logger.error(f"ERROR: invalid config.json: {e}", exc_info=False)
     sys.exit(1)
 
 try:
@@ -96,7 +127,7 @@ try:
     SENTRY_MONITORING_SDK = bool(config["SENTRY_MONITORING_SDK"])
     CRYPTED_CREDENTIALS = bool(config.get("CRYPTED_CREDENTIALS", False))
 except KeyError as e:
-    print(f"ERROR: missing config key: {e}", file=sys.stderr)
+    logger.error(f"ERROR: missing config key: {e}", exc_info=False)
     sys.exit(1)
 
 month_names_fr = {
@@ -192,42 +223,6 @@ if SENTRY_MONITORING_SDK:
     )
     if sentry_sdk.Hub.current.client and sentry_sdk.Hub.current.client.options.get("traces_sample_rate", 0) > 0:
         sentry_sdk.profiler.start_profiler()
-
-LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-
-max_bytes = 10 * 1024 * 1024  # 10 MB
-backup_count = 5
-
-log_handler = RotatingFileHandler(str(LOG_FILE), maxBytes=max_bytes, backupCount=backup_count)
-log_format = '%(asctime)s %(levelname)s %(message)s'
-log_datefmt = '%d-%m-%Y %H:%M:%S'
-formatter = logging.Formatter(log_format, log_datefmt)
-
-log_handler.setFormatter(formatter)
-
-logger = logging.getLogger("module_freeboxos")
-logger.addHandler(log_handler)
-
-sentry_handler = logging.StreamHandler()
-sentry_handler.setLevel(logging.WARNING)
-
-sensitive_filter = global_sanitizer
-
-log_handler.addFilter(sensitive_filter)
-sentry_handler.addFilter(sensitive_filter)
-
-sensitive_filter.update_patterns({
-    "admin_password": ADMIN_PASSWORD,
-    "freebox_ip": FREEBOX_SERVER_IP,
-})
-
-logger.addHandler(sentry_handler)
-logger.setLevel(logging.INFO)
-
-logging.basicConfig(level=logging.INFO,
-                    format=log_format,
-                    datefmt=log_datefmt,
-                    handlers=[log_handler, sentry_handler])
 
 if CRYPTED_CREDENTIALS:
     try:
