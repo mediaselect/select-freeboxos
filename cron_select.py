@@ -35,7 +35,7 @@ logging.basicConfig(level=logging.INFO,
 config_path = Path.home() / ".config" / "select_freeboxos" / "config.json"
 
 try:
-    with config_path.open() as f:
+    with config_path.open(encoding='utf-8') as f:
         config = json.load(f)
 except FileNotFoundError:
     logger.error("Missing config.json file")
@@ -57,7 +57,7 @@ def get_file_modification_time(file_path):
 def remove_items(INFO_PROGS, INFO_PROGS_LAST, PROGS_TO_RECORD):
     # Remove items already set to be recorded
     try:
-        with open(INFO_PROGS, 'r') as f:
+        with open(INFO_PROGS, 'r', encoding='utf-8') as f:
             source_data = json.load(f)
     except FileNotFoundError:
         logger.error(
@@ -73,14 +73,14 @@ def remove_items(INFO_PROGS, INFO_PROGS_LAST, PROGS_TO_RECORD):
         exit()
 
     try:
-        with open(INFO_PROGS_LAST, 'r') as f:
+        with open(INFO_PROGS_LAST, 'r', encoding='utf-8') as f:
             items_to_remove = json.load(f)
     except FileNotFoundError:
         items_to_remove = []
 
     modified_data = [item for item in source_data if item not in items_to_remove]
 
-    with open(PROGS_TO_RECORD, 'w') as f:
+    with open(PROGS_TO_RECORD, 'w', encoding='utf-8') as f:
         json.dump(modified_data, f, indent=4)
 
 OUTPUT_FILE = os.path.expanduser("~/.local/share/select_freeboxos/info_progs.json")
@@ -128,7 +128,7 @@ if info_progs_last_mod_time is None or info_progs_last_mod_time.date() < datetim
                 response = requests.get(API_URL, auth=(username, password), headers={"Accept": "application/json; indent=4"})
                 response.raise_for_status()
 
-                with open(OUTPUT_FILE, "w") as f:
+                with open(OUTPUT_FILE, "w", encoding='utf-8') as f:
                     f.write(response.text)
 
                 logger.info("Data downloaded with requests successfully.")

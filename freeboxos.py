@@ -109,7 +109,7 @@ except ValueError as e:
 CONFIG_PATH = Path.home() / ".config" / "select_freeboxos" / "config.json"
 
 try:
-    with CONFIG_PATH.open() as f:
+    with CONFIG_PATH.open(encoding='utf-8') as f:
         config = json.load(f)
 except FileNotFoundError:
     logger.error("ERROR: config.json not found")
@@ -272,7 +272,7 @@ except json.JSONDecodeError:
 try:
     with open(
         f"/home/{user}/.local/share/select_freeboxos/"
-        "progs_to_record.json", "r"
+        "progs_to_record.json", "r", encoding='utf-8'
     ) as jsonfile:
         data = json.load(jsonfile)
 except FileNotFoundError:
