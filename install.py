@@ -396,7 +396,7 @@ if go_on:
 
     print("\nConfiguration des tâches cron du programme MEDIA-select:\n")
 
-    response = requests.head("https://media-select.fr")
+    response = requests.head("https://media-select.fr", timeout=10)
     http_response = response.status_code
 
     if http_response != 200:
@@ -420,7 +420,10 @@ if go_on:
 
         while http_status != 200:
 
-            response = requests.head("https://www.media-select.fr/api/v1/progweek", auth=(username_mediaselect, password_mediaselect))
+            response = requests.head("https://www.media-select.fr/api/v1/progweek",
+                        auth=(username_mediaselect, password_mediaselect),
+                        timeout=10,
+                        )
             http_status = response.status_code
 
             if http_status != 200:

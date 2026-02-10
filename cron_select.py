@@ -125,7 +125,13 @@ if info_progs_last_mod_time is None or info_progs_last_mod_time.date() < datetim
                     logger.error("Keyring is locked or credentials are not set. Please unlock the keyring and try again.")
                     raise ValueError("Keyring is locked or credentials are not set.")
 
-                response = requests.get(API_URL, auth=(username, password), headers={"Accept": "application/json; indent=4"})
+                response = requests.get(
+                            API_URL,
+                            auth=(username, password),
+                            headers={"Accept": "application/json; indent=4"},
+                            timeout=10,
+                        )
+
                 response.raise_for_status()
 
                 with open(OUTPUT_FILE, "w", encoding='utf-8') as f:
