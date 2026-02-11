@@ -34,35 +34,19 @@ LOG_FILE = BASE_DIR / "logs" / "select_freeboxos.log"
 INFO_PROGS_FILE = BASE_DIR / "info_progs.json"
 INFO_PROGS_LAST_FILE = BASE_DIR / "info_progs_last.json"
 GECKODRIVER_PATH = BASE_DIR / "geckodriver"
-
 LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 max_bytes = 10 * 1024 * 1024  # 10 MB
 backup_count = 5
-
 log_handler = RotatingFileHandler(str(LOG_FILE), maxBytes=max_bytes, backupCount=backup_count)
 log_format = '%(asctime)s %(levelname)s %(message)s'
 log_datefmt = '%d-%m-%Y %H:%M:%S'
 formatter = logging.Formatter(log_format, log_datefmt)
-
 log_handler.setFormatter(formatter)
-
 logger = logging.getLogger("module_freeboxos")
 logger.addHandler(log_handler)
-
 sentry_handler = logging.StreamHandler()
 sentry_handler.setLevel(logging.WARNING)
-
-sensitive_filter = global_sanitizer
-
-log_handler.addFilter(sensitive_filter)
-sentry_handler.addFilter(sensitive_filter)
-
-sensitive_filter.update_patterns({
-    "admin_password": ADMIN_PASSWORD,
-    "freebox_ip": FREEBOX_SERVER_IP,
-})
-
 logger.addHandler(sentry_handler)
 logger.setLevel(logging.INFO)
 
@@ -71,18 +55,14 @@ def get_validated_user():
     user = os.getenv("USER")
     if not user:
         raise ValueError("USER environment variable is not set")
-
     if not re.match(r'^[a-zA-Z0-9_-]+$', user):
         raise ValueError(f"Invalid USER environment variable: contains unsafe characters")
-
     home_path = Path.home()
     expected_home = Path(f"/home/{user}")
-
     if home_path != expected_home:
         user = home_path.name
         if not re.match(r'^[a-zA-Z0-9_-]+$', user):
             raise ValueError("Home directory name contains unsafe characters")
-
     return user
 
 try:
@@ -109,7 +89,6 @@ except ValueError as e:
     sys.exit(1)
 
 CONFIG_PATH = Path.home() / ".config" / "select_freeboxos" / "config.json"
-
 try:
     with CONFIG_PATH.open(encoding='utf-8') as f:
         config = json.load(f)
@@ -132,6 +111,14 @@ try:
 except KeyError as e:
     logger.error(f"ERROR: missing config key: {e}", exc_info=False)
     sys.exit(1)
+
+sensitive_filter = global_sanitizer
+sensitive_filter.update_patterns({
+    "admin_password": ADMIN_PASSWORD,
+    "freebox_ip": FREEBOX_SERVER_IP,
+})
+log_handler.addFilter(sensitive_filter)
+sentry_handler.addFilter(sensitive_filter)
 
 month_names_fr = {
     '01': 'Jan',
