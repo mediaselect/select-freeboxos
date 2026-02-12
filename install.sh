@@ -70,7 +70,7 @@ step_3_freeboxos_download() {
   echo "---------------------------------------------------------------------"
   echo "Starting step 3 - select-freeboxos download"
   cd "$HOME_DIR" && curl https://github.com/mediaselect/select-freeboxos/archive/refs/tags/v3.1.0.zip -L -o select_freebox.zip
-  SELECT_FREEBOXOS_SHA256="c45919be6b4a9867f50f55283d39d842ccdebfa666716e030bbc7aa6e6f7c829"
+  SELECT_FREEBOXOS_SHA256="d5558cd419c8d46bdc958064cb97f963d1ea793866414c025906ec15033512ed"
   if ! echo "$SELECT_FREEBOXOS_SHA256  select_freebox.zip" | sha256sum -c -; then
       echo "ERROR: Checksum verification failed for select_freebox.zip!"
       exit 1
